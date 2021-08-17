@@ -1,0 +1,9 @@
+json_received/
+json_results/
+__pycache__/
+logger/
+result/
+test_*.py
+user*
+.idea/*
+lvwang_packing_*/

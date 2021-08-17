@@ -187,6 +187,10 @@ class LogAnalyzer:
             Path(OUTPUT).rename('%s_%s.%s' % (p[0], datetime.now().strftime('%Y-%m-%d_%H-%M-%S'), p[1]))
 
     def counter(self):
+        """
+        Count the number of
+        :return:
+        """
         self.RESULTS_JSON['count'] = len(self.RESULTS_JSON['data'])
         for obj in [self.RESULTS_OS, self.RESULTS_DEBUG]:
             for k in obj:
@@ -238,9 +242,11 @@ if __name__ == '__main__':
     # else:
     #     file = '0\INFO.2021-08-04_15-25-46_799323.log'
     # main(file)
+    #
+    # 分析结果存储位置
     json_result_path = 'json_results/0810/'
     import os
-
+    # json包所在位置
     dir_path = 'json_received/20210812/'
     if os.path.isdir(dir_path):
         for i in range(0, 31):

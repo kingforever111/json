@@ -19,6 +19,7 @@ def initLog(fname):
 
     return LOG_DIR, logger
 
+
 def launch(port, fname):
     log_dir, logger = initLog(fname)
     ctx = zmq.Context()
@@ -34,11 +35,11 @@ def launch(port, fname):
 if __name__ == '__main__':
     from multiprocessing import Process
 
-    maps = {
-        # Port: Street or road name
-        # e.g.: 5566: 'hainalu'
-    }
+    maps = {}
+    # # 31个杭州湾路口
+    for i in range(31):
+        maps[5600 + i] = i
+    print(maps)
 
     for port, fname in maps.items():
         Process(target=launch, args=(port, fname)).start()
-
