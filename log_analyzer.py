@@ -140,7 +140,7 @@ class LogAnalyzer:
             interval = t - t0
             if t0 != 0 and THRES_JSON_INTERVAL[0] < interval < THRES_JSON_INTERVAL[1]:
                 self.RESULTS_JSON['data'].append({
-                    'interval': '%.3fs' % interval,
+                    'interval': round(interval, 2),
                     'server': (get_datetime(t0), get_datetime(t)),
                     'client': (u0, u),
                 })
@@ -192,6 +192,16 @@ class LogAnalyzer:
         :return:
         """
         self.RESULTS_JSON['count'] = len(self.RESULTS_JSON['data'])
+        interval_less_5_count = 0
+        interval_large_5_count = 0
+        for d in self.RESULTS_JSON['data']:
+            if d['interval'] <= 5:
+                interval_less_5_count += 1
+            else:
+                interval_large_5_count += 1
+        self.RESULTS_JSON['interval_less_5_count'] = interval_less_5_count
+        self.RESULTS_JSON['interval_large_5_count'] = interval_large_5_count
+
         for obj in [self.RESULTS_OS, self.RESULTS_DEBUG]:
             for k in obj:
                 obj[k]['count'] = len(obj[k]['data'])
@@ -201,7 +211,9 @@ class LogAnalyzer:
             print('* JSON PACKETS')
             print(json.dumps(self.RESULTS_JSON, indent=4, ensure_ascii=False), '\n\n')
             ng_count = self.RESULTS_JSON['count']
-            logger.warning(f'{self.road_id}路口接收json包异常，异常{ng_count}次')
+            # interval_less_5_count = self.RESULTS_JSON['interval_less_5_count']
+            interval_large_5_count = self.RESULTS_JSON['interval_large_5_count']
+            logger.warning(f'{self.road_id}路口接收json包异常，异常{ng_count}次，大于5秒: {interval_large_5_count}次')
             JSON_ANALYSIS_DICT['ng'].append(self.road_id)
             data = json.dumps(self.RESULTS_JSON, indent=4, ensure_ascii=False)
             with open(self.json_result_path, 'a', encoding='utf-8') as f:
@@ -222,15 +234,19 @@ class LogAnalyzer:
         with open(file, encoding='utf-8') as f:
             for line in f:
                 if PATTERN_JSON.match(line):
+                    # print('分析Json')
                     self.unit_json(line)
                 elif PATTERN_OS.match(line):
+                    # print('分析OS')
                     self.unit_os(line)
                 elif PATTERN_DEBUG.match(line):
+                    # print('分析debug')
                     self.unit_debug(line)
         # handler()
+
+    def display(self):
         self.counter()
         self.printer()
-
         visualized(self.RESULTS_OS)
 
 
@@ -246,6 +262,7 @@ if __name__ == '__main__':
     # 分析结果存储位置
     json_result_path = 'json_results/0810/'
     import os
+
     # json包所在位置
     dir_path = 'json_received/20210812/'
     if os.path.isdir(dir_path):
@@ -268,14 +285,17 @@ if __name__ == '__main__':
                         date_str = time_str_list[0]
                         time_str = time_str_list[1]
                         timestamp = get_timestamp_format(f'{date_str}-{time_str}', '%Y-%m-%d-%H-%M-%S')
-                        if THRES_JSON_DATE[0] < timestamp < THRES_JSON_DATE[1]:
+                        if THRES_JSON_DATE[0] - 48 * 3600 < timestamp < THRES_JSON_DATE[1]:
                             logger.info(f'分析{i}路口日志: {subfile_path}')
                             analyzer.analyze(subfile_path)
                         else:
                             logger.debug(f'不分析{i}路口日志: {subfile_path}')
                     else:
+                        logger.info(f'分析{i}路口日志: {subfile_path}')
                         analyzer.analyze(subfile_path)
+                analyzer.display()
             else:
                 print(f'{i}路口日志不存在:{dir_path_numbered}')
+
     logger.info(f'json包信息检查完毕,更多详情请看{json_result_path}里的信息')
     logger.info(f'检查结果为{JSON_ANALYSIS_DICT}')
