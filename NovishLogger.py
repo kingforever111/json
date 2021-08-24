@@ -23,3 +23,5 @@ def add_logger(level):
 for level in LEVEL_LIST:
     add_logger(level)
 
+
+

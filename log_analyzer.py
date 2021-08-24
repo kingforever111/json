@@ -109,8 +109,10 @@ class LogAnalyzer:
         self.json_result_path = json_result_path
         self.road_id = road_id
         self.F = Path(OUTPUT).open('a') if FLAG_SAVE else None
+        self.all_counts = 0
+        self.error_counts = 0
         """ JSON PACKETS """
-        self.RESULTS_JSON = {'data': [], 'count': 0}
+        self.RESULTS_JSON = {'data': [], 'count': 0, 'list': [], 'digit': 0}
         """ OS STATUS """
         self.RESULTS_OS = {
             'ram': {'label': 'Memory', 'data': [], 'count': 0},
@@ -127,11 +129,16 @@ class LogAnalyzer:
     def unit_json(self, line):
         global t0, u0
         date = ' '.join(PATTERN_JSON.findall(line)[0]).strip()
+        #t内存储的为log输出时间对应的时间戳
         t = get_timestamp(date)
+        #判断时间在规定的时间内
         if THRES_JSON_DATE[0] < t < THRES_JSON_DATE[1]:
+            #把在需要分析的日期内的所有log整合到result.log文件中
             if FLAG_SAVE: self.F.write(line)
             client_json_time = [int(t) for t in PATTERN_JSON_U.findall(line)]
+            #U内存储的为log中'u'对应的时间，形式为列表
             u = [get_datetime(t) for t in client_json_time]
+
             # print(THRES_OS_SYNC_CHECK)
             # print(client_json_time[0])
             if client_json_time[0] < THRES_OS_SYNC_CHECK and not self.flag_time_sync_checked:
@@ -199,6 +206,8 @@ class LogAnalyzer:
                 interval_less_5_count += 1
             else:
                 interval_large_5_count += 1
+                self.RESULTS_JSON['list'].append(d['interval'])
+
         self.RESULTS_JSON['interval_less_5_count'] = interval_less_5_count
         self.RESULTS_JSON['interval_large_5_count'] = interval_large_5_count
 
@@ -213,7 +222,11 @@ class LogAnalyzer:
             ng_count = self.RESULTS_JSON['count']
             # interval_less_5_count = self.RESULTS_JSON['interval_less_5_count']
             interval_large_5_count = self.RESULTS_JSON['interval_large_5_count']
-            logger.warning(f'{self.road_id}路口接收json包异常，异常{ng_count}次，大于5秒: {interval_large_5_count}次')
+            interval_large_5_info = self.RESULTS_JSON['list']
+            all_counts = self.all_counts
+            error_counts = self.error_counts
+            error_rate = error_counts/all_counts
+            logger.warning(f'{self.road_id}路口接收json包异常，异常{ng_count}次，大于5秒: {interval_large_5_count}次{interval_large_5_info},cam_error异常数/总数：{error_counts}/{all_counts};异常率{error_rate}')
             JSON_ANALYSIS_DICT['ng'].append(self.road_id)
             data = json.dumps(self.RESULTS_JSON, indent=4, ensure_ascii=False)
             with open(self.json_result_path, 'a', encoding='utf-8') as f:
@@ -236,18 +249,24 @@ class LogAnalyzer:
                 if PATTERN_JSON.match(line):
                     # print('分析Json')
                     self.unit_json(line)
+                    self.warning_file(line)
                 elif PATTERN_OS.match(line):
                     # print('分析OS')
                     self.unit_os(line)
                 elif PATTERN_DEBUG.match(line):
                     # print('分析debug')
                     self.unit_debug(line)
-        # handler()
 
     def display(self):
         self.counter()
         self.printer()
         visualized(self.RESULTS_OS)
+
+    def warning_file(self, line):
+        self.all_counts += 1
+        if "'cam_status':'ERROR'" in line:
+            self.error_counts += 1
+
 
 
 if __name__ == '__main__':
@@ -269,33 +288,36 @@ if __name__ == '__main__':
         for i in range(0, 31):
             dir_path_numbered = f'{dir_path}/{i}/'
             if os.path.isdir(dir_path_numbered):
+                #json_result_filepath为'json_results/0810/'路径下存储每日的.txt文件
                 json_result_filepath = f'{json_result_path}/{i}.txt'
                 if not os.path.exists(json_result_path):
                     os.makedirs(json_result_path)
-                logger.info(f'分析{i}路口日志: {dir_path_numbered}')
+                logger.debug(f'分析{i}路口日志: {dir_path_numbered}')
                 analyzer = LogAnalyzer(i, json_result_filepath)
+                #filelist存储'json_received/20210812/{i}/'的所有文件名
                 filelist = os.listdir(dir_path_numbered)
                 for file_name in filelist:
+                    #记录每个文件路径
                     subfile_path = f'{dir_path_numbered}/{file_name}'
-                    logger.info(f'查看{i}路口日志文件名是否在区间范围: {subfile_path}')
+                    logger.debug(f'查看{i}路口日志文件名是否在区间范围: {subfile_path}')
                     log_filename_list = file_name.split('.')
                     if len(log_filename_list) > 2:
                         log_time = log_filename_list[1]
                         time_str_list = log_time.split('_')
                         date_str = time_str_list[0]
                         time_str = time_str_list[1]
+                        #得到日志输出时间的时间戳
                         timestamp = get_timestamp_format(f'{date_str}-{time_str}', '%Y-%m-%d-%H-%M-%S')
                         if THRES_JSON_DATE[0] - 48 * 3600 < timestamp < THRES_JSON_DATE[1]:
-                            logger.info(f'分析{i}路口日志: {subfile_path}')
+                            logger.debug(f'分析{i}路口日志: {subfile_path}')
                             analyzer.analyze(subfile_path)
                         else:
                             logger.debug(f'不分析{i}路口日志: {subfile_path}')
                     else:
-                        logger.info(f'分析{i}路口日志: {subfile_path}')
+                        logger.debug(f'分析{i}路口日志: {subfile_path}')
                         analyzer.analyze(subfile_path)
                 analyzer.display()
             else:
                 print(f'{i}路口日志不存在:{dir_path_numbered}')
-
-    logger.info(f'json包信息检查完毕,更多详情请看{json_result_path}里的信息')
-    logger.info(f'检查结果为{JSON_ANALYSIS_DICT}')
+    logger.debug(f'json包信息检查完毕,更多详情请看{json_result_path}里的信息')
+    logger.debug(f'检查结果为{JSON_ANALYSIS_DICT}')
